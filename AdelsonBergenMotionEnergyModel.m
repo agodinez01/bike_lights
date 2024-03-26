@@ -69,62 +69,78 @@ t_filt = linspace(0, max_t, nt)';
 k = 100;    % Scales the response into time units
 slow_n = 9; % Width of the slow temporal filter
 fast_n = 6; % Width of the fast temporal filter
-beta =0.9;  % Beta. Represents the weighting of the negative
+beta = linspace(0,1,11);  % Beta. Represents the weighting of the negative
             % phase of the temporal relative to the positive 
             % phase.
 
 % Temporal filter response (formula as in Adelson & Bergen, 1985, Eq. 1)
-slow_t = (k*t_filt).^slow_n .* exp(-k*t_filt).*(1/factorial(slow_n)-beta.*((k*t_filt).^2)/factorial(slow_n+2));
-fast_t = (k*t_filt).^fast_n .* exp(-k*t_filt).*(1/factorial(fast_n)-beta.*((k*t_filt).^2)/factorial(fast_n+2));
+for b=1:length(beta)
+    slow_t{b} = (k*t_filt).^slow_n .* exp(-k*t_filt).*(1/factorial(slow_n)-beta(1,b).*((k*t_filt).^2)/factorial(slow_n+2));
+    fast_t{b} = (k*t_filt).^fast_n .* exp(-k*t_filt).*(1/factorial(fast_n)-beta(1,b).*((k*t_filt).^2)/factorial(fast_n+2));
+end
 
 figure();
-plot(slow_t, 'b');
-hold on;
-plot(fast_t, 'g');
+for b=1:length(beta)
+    plot(slow_t{b}, 'b');
+    hold on;
+    plot(fast_t{b}, 'g');
+end
 xlabel('Time (sec)')
 legend('Slow Filter', 'Fast Filter', box='off')
 title('Temporal profile')
-saveas(gcf, strcat(figPath, 'Temporal_profile.svg'))
+saveas(gcf, strcat(figPath, 'Temporal_profile_many_betas.svg'))
 
 % Step 1c: combine space and time to create spatiotemporal filters
-e_slow = slow_t * even_x;   % SE/TS
-e_fast = fast_t * even_x;   % SE/TF
-o_slow = slow_t * odd_x;    % SO/TS
-o_fast = fast_t * odd_x;    % SO/TF
-
-st_filters = {e_slow, e_fast, o_slow, o_fast};
-
-figure()
-for i = 1:length(st_filters)
-    subplot(1,4,i)
-    imagesc(st_filters{i})
-    colormap("gray")
-    axis off
-    axis equal
+for b = 1:length(beta)
+    e_slow{b} = slow_t{b} * even_x;   % SE/TS
+    e_fast{b} = fast_t{b} * even_x;   % SE/TF
+    o_slow{b} = slow_t{b} * odd_x;    % SO/TS
+    o_fast{b} = fast_t{b} * odd_x;    % SO/TF
+    
+    st_filters{b} = {e_slow{b}, e_fast{b}, o_slow{b}, o_fast{b}};
 end
 
-saveas(gcf, strcat(figPath, 'Spatiotemporal_filters.svg'))
+figure()
+count = 1;
+for b = 1:length(beta)
+    for i = 1:length(st_filters{b})
+        subplot(11,4,count)
+        imagesc(st_filters{b}{i})
+        colormap("gray")
+        axis off
+        axis equal
+        count = count + 1;
+    end
+end
+
+saveas(gcf, strcat(figPath, 'Spatiotemporal_filters_many_betas.svg'))
 
 %--------------------------------------------------------------------------
 %         STEP 2: Create spatiotemporally oriented filters
 %--------------------------------------------------------------------------
-left_1  = o_fast+e_slow;     % L1
-left_2  = -o_slow+e_fast;    % L2
-right_1 = -o_fast+e_slow;    % R1
-right_2 = o_slow+e_fast;     % R2
+for b = 1:length(beta)
+    left_1{b}  = o_fast{b} + e_slow{b};     % L1
+    left_2{b}  = -o_slow{b} + e_fast{b};    % L2
+    right_1{b} = -o_fast{b} + e_slow{b};    % R1
+    right_2{b} = o_slow{b} + e_fast{b};     % R2
 
-st_oriented_filters = {left_1, left_2, right_1, right_2};
-
-figure()
-for i = 1:length(st_oriented_filters)
-    subplot(1,4,i)
-    imagesc(st_oriented_filters{i})
-    colormap('gray')
-    axis('off')
-    axis('equal')
+    st_oriented_filters{b} = {left_1{b}, left_2{b}, right_1{b}, right_2{b}};
 end
 
-saveas(gcf, strcat(figPath, 'Spatiotemporal_oriented_filters.svg'))
+figure()
+count = 1;
+for b = 1:length(beta)
+    for i = 1:length(st_oriented_filters{b})
+        subplot(11,4,count)
+        imagesc(st_oriented_filters{b}{i})
+        colormap('gray')
+        axis('off')
+        axis('equal')
+        count = count + 1;
+    end
+end
+
+saveas(gcf, strcat(figPath, 'Spatiotemporal_oriented_filters_many_betas.svg'))
 
 %--------------------------------------------------------------------------
 %         STEP 3: Convolve the filters with a stimulus
@@ -146,14 +162,15 @@ t_stim = (0:dt:round(stim_dur-dt))';
 bgVal   = 0; % Background color
 stimVal = 1; % Stim color
 
-imgSizeX  = 4000;
+imgSizeX  = 350;
 xs        = 0:imgSizeX;
 startXPos = 20;
 
-stimSpeed = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]; % [px/frame]
+% stimSpeed = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]; % [px/frame]
+stimSpeed = [0, 1, 2]; % [px/frame]
 
 % how many time intervals to run simulation?
-ts = 200;
+ts = 150;
 
 output = [];
 for s=1:length(stimSpeed)
@@ -258,15 +275,14 @@ for s = 1:length(output)
     
     % Plot the stimulus
     figure(20)
-    subplot(3, 4, s);
+    subplot(3, 1, s);
     imagesc(stim); 
     colormap(gray);
     %axis off
     xlabel('x position');
     ylabel('time');
     title(strcat(num2str(stimSpeed(s)), ' px/frame'));
-    %caxis([0, 1.0]);
-    %axis equal
+    saveas(gcf, strcat(figPath, 'Stimulus.svg'))
     
     % Plot the output:
     %   Generate motion contrast matrix
@@ -288,26 +304,63 @@ for s = 1:length(output)
     end
     
     figure (21)
-    subplot(3, 4, s)
+    subplot(3, 1, s)
     imagesc(motion_contrast); 
     colormap(gray);
     % axis off
     clim([-peak, peak]);
     % axis equal
+    xlabel('x position');
+    ylabel('time');
     title(strcat(num2str(stimSpeed(s)), ' px/frame'));
+    saveas(gcf, strcat(figPath, 'Motion Energy.svg'))
+
     %--------------------------------------------------------------------------
 
 end
 
-% % Show quick movie
-% figure(); hold on;
-% for t =1:ts
-%     imagesc(output(3).stim(t,:))
-%     colormap(gray);
-%     xlabel('x position');
-%     ylabel('time')
-%     drawnow;
+% Show quick movie
+figure(); hold on;
+for t =1:ts
+    imagesc(output(3).stim(t,:))
+    colormap(gray);
+    xlabel('x position');
+    ylabel('time')
+    drawnow;
+end
+
+% % Make bitmaps into video
+% workingDir = pwd;
+% mkdir(workingDir, "images");
+% 
+% % % Create a VideoReader object for reading frames from the sample file (e.g., shuttle.avi)
+% % shuttleVideo = VideoReader("shuttle.avi");
+% 
+% imageNames = {};
+% for t=1:ts
+%     filename = sprintf("%03d.jpg", t);
+%     fullname = fullfile(workingDir, "images", filename);
+%     imwrite(output(3).stim(t,:), fullname);
+%     imageNames{t} = filename;
 % end
+% 
+% outputVideo = VideoWriter(fullfile(workingDir, "images", "shuttle_out.avi"));
+% % outputVideo.FrameRate = shuttleVideo.FrameRate;
+% open(outputVideo);
+% 
+% % Loop through the image sequence, load each image, and write it to the video
+% for i = 1:ts
+%     img = imread(fullfile(workingDir, "images", imageNames{i}));
+%     writeVideo(outputVideo, img);
+% end
+% 
+% % Finalize the video file
+% close(outputVideo);
+% 
+% shuttleAvi = VideoReader(fullfile(workingDir, "images", "shuttle_out.avi"));
+% vf = figure('Position', [0 0 shuttleAvi.Width shuttleAvi.Height]);
+% imshow(mov(1).cdata, 'Border', 'tight');
+% movie(vf, mov, 1, shuttleAvi.FrameRate);
 
 
 % figure()
@@ -318,12 +371,13 @@ end
 
 figure()
 for s = 1:length(output)
-    plot(output(s).speed, output(s).motion_energy, '.k')
+    plot(output(s).speed, output(s).motion_energy, '.k');
     hold on;
 end
 
 f = fit(stimSpeed', energy', 'poly2'); % Fit the data
 plot(f, stimSpeed, energy) % Plot the fit
 
+legend('Location','southeast');
 xlabel('stimulus speed (px/frame)');
 ylabel('Net motion energy response');
